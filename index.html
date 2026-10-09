@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PrepPlan</title>
+<meta name="description" content="תכנון meal-prep שבועי: תפריט, רשימת קניות ותוכנית בישול לפי המטרה, התקציב והזמן שלך">
+<link rel="icon" href="img/logo.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Hebrew:wght@400;500;600;700&family=Secular+One&display=swap">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="wrap">
+
+  <!-- 0 · welcome -->
+  <section class="screen welcome" id="s0">
+    <svg class="logo" viewBox="0 0 64 64" aria-hidden="true"><rect x="5" y="14" width="54" height="42" rx="11" fill="var(--accent)"/><rect x="9" y="8" width="46" height="9" rx="4.5" fill="var(--accent-2)"/><rect x="11" y="21" width="24" height="29" rx="6" fill="var(--logo-a)"/><rect x="38" y="21" width="15" height="13" rx="5" fill="var(--logo-b)"/><rect x="38" y="37" width="15" height="13" rx="5" fill="var(--logo-c)"/><path d="M16.5 35.5l4.5 4.5 8.5-9" fill="none" stroke="var(--accent)" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <div class="wordmark">Prep<span>Plan</span></div>
+    <h1>שבוע של אוכל מסודר, בבישול אחד</h1>
+    <p class="lead">ספרו לנו מה המטרה ומה התקציב, ונבנה לכם תפריט לשבוע, רשימת קניות ותוכנית בישול שמתאימים בדיוק.</p>
+    <ol class="how3">
+      <li><span class="n">1</span><b>בוחרים מטרה</b><span>מסה, שמירה או חיטוב</span></li>
+      <li><span class="n">2</span><b>תקציב וזמן</b><span>כמה כסף וכמה זמן לבשל</span></li>
+      <li><span class="n">3</span><b>מקבלים שבוע מוכן</b><span>תפריט, קניות ומתכונים</span></li>
+    </ol>
+    <div class="cta">
+      <button class="btn big" type="button" id="start">בואו נתחיל</button>
+      <button class="linkbtn" type="button" id="resume" hidden></button>
+      <span class="small muted">לוקח פחות מדקה</span>
+    </div>
+  </section>
+
+  <div class="top" id="topbar">
+    <button class="brand" id="home" type="button" aria-label="לדף הבית">
+      <svg class="logo" viewBox="0 0 64 64" aria-hidden="true"><rect x="5" y="14" width="54" height="42" rx="11" fill="var(--accent)"/><rect x="9" y="8" width="46" height="9" rx="4.5" fill="var(--accent-2)"/><rect x="11" y="21" width="24" height="29" rx="6" fill="var(--logo-a)"/><rect x="38" y="21" width="15" height="13" rx="5" fill="var(--logo-b)"/><rect x="38" y="37" width="15" height="13" rx="5" fill="var(--logo-c)"/><path d="M16.5 35.5l4.5 4.5 8.5-9" fill="none" stroke="var(--accent)" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span>Prep<span>Plan</span></span>
+    </button>
+    <div class="toplinks">
+      <button class="tl" type="button" data-go="weeks">השבועות שלי <b id="nWeeks">0</b></button>
+      <button class="tl" type="button" data-go="how">איך זה עובד?</button>
+    </div>
+  </div>
+
+  <div class="steps" id="progress">
+    <div><i></i>מטרה</div><div><i></i>זמן וכסף</div><div><i></i>המטבח שלך</div><div><i></i>השבוע שלך</div>
+  </div>
+
+  <!-- 1 · goal -->
+  <section class="screen" id="s1" hidden>
+    <div class="q"><h2>מה המטרה שלך?</h2><p>לפי זה נקבע כמה לאכול כל יום.</p></div>
+    <div class="choices" id="goal">
+      <button type="button" class="choice" data-v="bulk"><span class="ic">+</span><b>עלייה במסת שריר</b><span>יותר קלוריות, הרבה חלבון</span></button>
+      <button type="button" class="choice" data-v="maintain"><span class="ic">=</span><b>שמירה על המשקל</b><span>לאכול מסודר בלי לשנות משקל</span></button>
+      <button type="button" class="choice" data-v="cut"><span class="ic">−</span><b>ירידה במשקל</b><span>פחות קלוריות, חלבון גבוה לשמירת שריר</span></button>
+    </div>
+    <div class="panel">
+      <div class="stepper"><span>המשקל שלך</span><div class="ctl"><button type="button" data-step="weight" data-d="1" aria-label="הוסף">+</button><output id="weightOut"></output><button type="button" data-step="weight" data-d="-1" aria-label="הורד">−</button></div></div>
+      <div class="target" id="targetLine"></div>
+      <div class="edit" id="editTargets" hidden>
+        <label>קלוריות ליום<input type="number" id="kcal" step="50"></label>
+        <label>חלבון ליום (גרם)<input type="number" id="protein" step="5"></label>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2 · time & money -->
+  <section class="screen" id="s2" hidden>
+    <div class="q"><h2>כמה זמן וכסף יש לך?</h2><p>התפריט לא יחרוג מהגבולות האלה.</p></div>
+    <div class="panel">
+      <div class="stepper"><span>תקציב לשבוע</span><div class="ctl"><button type="button" data-step="budget" data-d="1" aria-label="הוסף">+</button><output id="budgetOut"></output><button type="button" data-step="budget" data-d="-1" aria-label="הורד">−</button></div></div>
+      <div class="stepper"><span>זמן בישול לשבוע</span><div class="ctl"><button type="button" data-step="time" data-d="1" aria-label="הוסף">+</button><output id="timeOut"></output><button type="button" data-step="time" data-d="-1" aria-label="הורד">−</button></div></div>
+      <div class="stepper"><span>כמה ימים לתכנן</span><div class="ctl"><button type="button" data-step="days" data-d="1" aria-label="הוסף">+</button><output id="daysOut"></output><button type="button" data-step="days" data-d="-1" aria-label="הורד">−</button></div></div>
+      <p class="small muted" style="margin:0">ארוחת בוקר, 2 ארוחות עיקריות ועד 2 נשנושים ביום. המנות העיקריות מתבשלות בבישול אחד בתחילת השבוע. תבלינים ורטבים לא נכללים בתקציב.</p>
+    </div>
+    <div class="q"><h3>כמה גיוון בתפריט?</h3><p id="varietyHint"></p></div>
+    <div class="seg" id="variety">
+      <button type="button" data-v="low">מעט</button>
+      <button type="button" data-v="mid">בינוני</button>
+      <button type="button" data-v="high">הרבה</button>
+    </div>
+    <div class="q"><h3>מה הכי חשוב לך?</h3></div>
+    <div class="seg" id="mode">
+      <button type="button" data-v="cost">לחסוך כסף</button>
+      <button type="button" data-v="time">לחסוך זמן</button>
+      <button type="button" data-v="protein">מקסימום חלבון</button>
+    </div>
+  </section>
+
+  <!-- 3 · kitchen -->
+  <section class="screen" id="s3" hidden>
+    <div class="q"><h2>מה יש במטבח?</h2><p>מה שתסמנו לא ייכנס לרשימת הקניות, והתפריט ינסה להשתמש בזה.</p></div>
+    <input type="search" class="search" id="fridgeSearch" placeholder="חיפוש מרכיב, למשל: אורז">
+    <div class="cats" id="fridge"></div>
+    <div class="q"><h3>משהו שאתם לא אוכלים?</h3></div>
+    <div class="chips" id="exclude"></div>
+    <div class="q"><h3>בקשות מיוחדות <span class="small muted">(לא חובה)</span></h3><p>Gemini ייצור מתכונים חדשים לפי הבקשה, והם ייבדקו לפני שייכנסו לתפריט.</p></div>
+    <textarea class="req" id="request" placeholder="למשל: משהו אסייתי וחריף, בלי טונה"></textarea>
+  </section>
+
+  <!-- 4 · results -->
+  <section class="screen" id="s4" hidden>
+    <div class="q"><h2 id="resTitle">השבוע שלך</h2><p id="resSub"></p></div>
+    <div id="busy" class="busy" hidden><span class="spin"></span><span id="busyText"></span></div>
+    <div id="gemNote" class="note" hidden></div>
+    <div id="alert" class="alert" hidden></div>
+    <div id="results">
+      <div class="summary" id="summary"></div>
+      <div class="ask">
+        <b>רוצה לשנות משהו? ספרו ל־Gemini</b>
+        <div class="row2"><input type="text" id="askIn" placeholder="למשל: פחות עוף, יותר דגים"><button class="btn sm" type="button" id="askBtn">שנה את התפריט</button></div>
+      </div>
+      <div style="display:flex;justify-content:flex-end;margin-top:12px"><button class="btn ghost sm" type="button" id="another">תפריט אחר ↻</button></div>
+      <div class="seg" id="view" style="margin-block:12px 16px">
+        <button type="button" data-v="menu">1 · התפריט</button>
+        <button type="button" data-v="shop">2 · קניות</button>
+        <button type="button" data-v="cook">3 · בישול</button>
+      </div>
+      <div class="panel" id="viewBody"></div>
+    </div>
+  </section>
+
+  <!-- saved weeks -->
+  <section class="screen" id="sweeks" hidden>
+    <div class="q"><h2>השבועות שלי</h2><p>שבועות ששמרת נשמרים בדפדפן הזה.</p></div>
+    <div class="panel" id="weeksList"></div>
+  </section>
+
+  <!-- how it works -->
+  <section class="screen" id="show" hidden>
+    <div class="q"><h2>איך זה עובד?</h2><p>שני כלים עובדים יחד: Gemini מבין מה ביקשת, והאופטימיזציה מבטיחה שהמספרים נכונים.</p></div>
+
+    <ol class="flow">
+      <li><span class="fi">1</span><b>הבקשה שלך</b><span>מטרה, תקציב, זמן, מה יש במטבח ובקשה חופשית</span></li>
+      <li class="g"><span class="fi">2</span><b>Gemini</b><span>מבין את הבקשה בשפה חופשית ויוצר מתכונים חדשים</span></li>
+      <li><span class="fi">3</span><b>בדיקה</b><span>קלוריות וחלבון מחושבים מחדש מטבלת הערכים</span></li>
+      <li><span class="fi">4</span><b>אופטימיזציה</b><span>בוחרת את השילוב הכי טוב מבין עשרות מתכונים</span></li>
+      <li class="r"><span class="fi">✓</span><b>השבוע שלך</b><span>תפריט, רשימת קניות ותוכנית בישול</span></li>
+    </ol>
+
+    <div class="panel">
+      <h3>מה התפריט שלך מבטיח</h3>
+      <p class="small muted" style="margin:0" id="howGoal"></p>
+      <ul class="guar" id="guar"></ul>
+    </div>
+
+    <div class="howgrid">
+      <div class="panel"><h3>הרעיון של meal-prep</h3><p class="small" style="margin:0">זמן הבישול נספר פעם אחת לכל מתכון ולא לכל מנה: לבשל 5 מנות עוף לוקח בערך כמו לבשל אחת. לכן המודל שוקל כמה מתכונים שונים כדאי לבשל.</p></div>
+      <div class="panel"><h3>למה לא לתת ל־Gemini לעשות הכול?</h3><p class="small" style="margin:0">מודל שפה לא מבטיח מספרים. בבדיקות Gemini טעה בקלוריות עד ‎30%‎. לכן הוא אחראי על השפה והרעיונות, והחישוב קובע את הכמויות.</p></div>
+      <div class="panel"><h3>כשאין פתרון</h3><p class="small" style="margin:0">האפליקציה מורידה כל דרישה בנפרד, פותרת שוב ואומרת מה צריך לשנות. אם מספיק שינוי קטן, היא מציעה אותו לבד.</p></div>
+      <div class="panel"><h3>הנתונים</h3><p class="small" style="margin:0"><span id="dataLine"></span> ערכים תזונתיים: מאגר "צמרת" של משרד הבריאות ו־USDA. מחירים: ממוצעים בסופרמרקטים בישראל, אוקטובר 2026 (בעיגול).</p></div>
+    </div>
+
+    <details class="panel adv"><summary>הנוסחה המתמטית המלאה (תכנון לינארי בשלמים)</summary>
+      <div class="formula" id="formula" style="margin-top:10px"></div>
+      <p class="small muted" style="margin:6px 0 0">x = מנות רגילות, z = מנות גדולות (×1.4), y = האם המתכון מתבשל (0/1), b = ארוחות בוקר, s = נשנושים.</p>
+    </details>
+    <details class="panel adv"><summary>הגדרות מתקדמות: חיבור ל־Gemini</summary>
+      <div style="display:grid;gap:8px;margin-top:8px">
+        <span class="small muted">ברירת המחדל היא שרת הביניים של PrepPlan. מפתח API אישי (לא חובה) מקבל עדיפות ונשמר רק בדפדפן הזה.</span>
+        <input type="text" id="gproxy" dir="ltr" placeholder="https://…workers.dev">
+        <input type="password" id="gkey" dir="ltr" placeholder="מפתח API אישי (לא חובה)" autocomplete="off">
+      </div>
+    </details>
+  </section>
+</div>
+
+<nav class="nav"><div class="in">
+  <button class="btn ghost" type="button" id="back">הקודם</button>
+  <button class="btn" type="button" id="next">הבא</button>
+</div></nav>
+<div class="toast" id="toast" hidden></div>
+
+<script src="vendor/solver.js"></script>
+<script src="js/data-ingredients.js"></script>
+<script src="js/data-recipes.js"></script>
+<script src="js/model.js"></script>
+<script src="js/gemini.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
