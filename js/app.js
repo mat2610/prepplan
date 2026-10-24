@@ -18,8 +18,8 @@ function toast(t){ const el=$('#toast'); el.textContent=t; el.hidden=false; clea
 /* ---------- state ---------- */
 const st = {
   screen:'s0', mode:'cost', plan:null, view:'menu', day:0, rec:0, ticks:{}, savedId:null, customTargets:false,
-  S:{goal:'bulk', weight:80, kcal:2800, protein:160, budget:250, time:150, days:5, meals:2, snacks:2, variety:'mid',
-     exclude:[], fridge:['rice','oil','salt'], ban:[], prefer:[], seed:0, avoid:[]},
+  S:{goal:'bulk', weight:80, kcal:2800, protein:160, budget:250, time:240, days:5, meals:2, snacks:2, variety:'max',
+     exclude:[], fridge:['rice','oil','salt'], ban:[], prefer:[], seed:0, avoid:[], level:'normal', shop:'normal'},
   gem:null   // last Gemini result for the current plan: {note, report, error, prompt}
 };
 function targetsFor(goal,w){ const t={bulk:[35,2.0],maintain:[31,1.8],cut:[26,2.2]}[goal]; return {kcal:Math.round(w*t[0]/50)*50, protein:Math.round(w*t[1]/5)*5}; }
@@ -35,7 +35,8 @@ function saveGeminiRecipes(list){ try{ const old=JSON.parse(store.get('prepplan.
 function renderInputs(){
   const S=st.S;
   $$('#goal .choice').forEach(b=>b.setAttribute('aria-pressed',b.dataset.v===S.goal));
-  $('#weightOut').textContent=S.weight+' ק"ג';
+  if(document.activeElement!==$('#weightIn')) $('#weightIn').value=S.weight;
+  $('#weightRange').value=S.weight;
   $('#targetLine').innerHTML=`<span>היעד היומי: <b>${fmt(S.kcal)}</b> קק"ל · <b>${S.protein}</b> ג' חלבון</span><button class="linkbtn" type="button" id="toggleEdit">${$('#editTargets').hidden?'לשנות ידנית':'סגור'}</button>`;
   $('#kcal').value=S.kcal; $('#protein').value=S.protein;
   $('#budgetOut').textContent=S.budget+' ₪';
@@ -43,7 +44,11 @@ function renderInputs(){
   $('#daysOut').textContent=S.days+' ימים';
   $$('#mode button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.v===st.mode));
   $$('#variety button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.v===S.variety));
-  $('#varietyHint').textContent={low:'מעט מתכונים שחוזרים על עצמם: הכי מעט זמן בישול.',mid:'כל מנה עיקרית לכל היותר 3 פעמים בשבוע.',high:'כל מנה עיקרית לכל היותר פעמיים בשבוע: יותר מתכונים, יותר זמן בישול.'}[S.variety];
+  $('#varietyHint').textContent={low:'מעט מתכונים שחוזרים על עצמם: הכי מעט זמן בישול.',mid:'כל מנה עיקרית לכל היותר 3 פעמים בשבוע.',high:'מנה עיקרית חוזרת לכל היותר פעמיים בשבוע, ולא ביומיים רצופים.', max:'כל ארוחה שונה: אף מנה עיקרית לא חוזרת השבוע. זה דורש יותר זמן בישול, בערך 4 שעות ל־5 ימים.'}[S.variety];
+  $$('#level button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.v===(S.level||'normal')));
+  $('#levelHint').textContent={simple:'רק מנות קצרות ופשוטות, עד 40 דקות למתכון.',normal:'שילוב של מנות פשוטות ומושקעות, לפי מה שמתאים ליעדים.',fancy:'לפחות 2 מנות מושקעות יותר (קארי, תבשיל ארוך, מנה אפויה). צריך יותר זמן בישול.'}[S.level||'normal'];
+  $$('#shop button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.v===(S.shop||'normal')));
+  $('#shopHint').textContent=(S.shop==='fridge')?'התפריט ינסה להשתמש בכמה שיותר ממה שסימנתם, וקונים רק את מה שחסר. Gemini גם ימציא מתכונים ממה שיש במקרר.':'התפריט נבנה לפי היעדים, ומה שסימנתם לא ייכנס לרשימת הקניות.';
   renderFridge();
   $('#exclude').innerHTML=Object.entries(TAGS).map(([k,n])=>`<button type="button" class="chip no" data-ex="${k}" aria-pressed="${S.exclude.includes(k)}">${n}</button>`).join('');
 }
@@ -59,7 +64,15 @@ function renderFridge(){
 }
 $('#goal').addEventListener('click',e=>{ const b=e.target.closest('.choice'); if(!b) return; st.S.goal=b.dataset.v; st.customTargets=false; syncTargets(); renderInputs(); });
 $('#mode').addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b) return; st.mode=b.dataset.v; renderInputs(); });
+/* weight: type it or drag the slider; targets update live */
+function setWeight(v,fromRange){ const n=Math.round(Number(v)); if(!n||n<40||n>160) return; st.S.weight=n; syncTargets(); if(fromRange) $('#weightIn').value=n; renderInputs(); }
+$('#weightIn').addEventListener('input',e=>setWeight(e.target.value,false));
+$('#weightIn').addEventListener('change',e=>{ e.target.value=st.S.weight; });
+$('#weightIn').addEventListener('focus',e=>e.target.select());
+$('#weightRange').addEventListener('input',e=>setWeight(e.target.value,true));
 $('#variety').addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b) return; st.S.variety=b.dataset.v; renderInputs(); });
+$('#level').addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b) return; st.S.level=b.dataset.v; renderInputs(); });
+$('#shop').addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b) return; st.S.shop=b.dataset.v; renderInputs(); });
 $('#fridgeSearch').addEventListener('input',renderFridge);
 ['kcal','protein'].forEach(id=>$('#'+id).addEventListener('change',e=>{ st.S[id]=Number(e.target.value)||st.S[id]; st.customTargets=true; renderInputs(); }));
 document.addEventListener('click',e=>{
@@ -75,7 +88,7 @@ document.addEventListener('click',e=>{
 /* =========================================================
    Building the week: (Gemini) → verification → optimiser
    ========================================================= */
-const plain = it => ({id:it.id, base:it.base, big:it.big, n:it.n, time:it.time, ing:it.ing, steps:it.steps||[], k:it.k, p:it.p, c:it.c, f:it.f, src:it.src});
+const plain = it => ({id:it.id, base:it.base, big:it.big, lvl:it.lvl, src_url:it.src_url, orig:it.orig, adapt:it.adapt, n:it.n, time:it.time, ing:it.ing, steps:it.steps||[], k:it.k, p:it.p, c:it.c, f:it.f, src:it.src});
 function finish(p){ p.breakfasts=p.breakfasts||[]; p.tot=totals(p.meals,p.snacks,p.S,p.breakfasts); p.days=assignDays(p,p.S); p.shop=shoppingList(p,p.S); return p; }
 function solvePlan(){
   if(typeof solver==='undefined') return {error:'ספריית החישוב לא נטענה. רעננו את הדף.'};
@@ -84,14 +97,18 @@ function solvePlan(){
     const diag=diagnose(st.S);
     // apply automatically the gentlest single change (time, variety, budget), protein changes stay the user's call
     const gentle=diag.find(x=>x.key==='time' && x.need<=st.S.time*1.5) || diag.find(x=>x.key==='variety') || diag.find(x=>x.key==='budget' && x.need<=st.S.budget*1.3);
-    if(!gentle) return {infeasible:true, diag};
-    const before={time:st.S.time, variety:st.S.variety, budget:st.S.budget};
-    if(gentle.key==='time') st.S.time=Math.ceil(gentle.need/15)*15;
-    if(gentle.key==='variety') st.S.variety=gentle.need;
-    if(gentle.key==='budget') st.S.budget=Math.ceil(gentle.need/10)*10;
-    r=solveBalanced(st.S,st.mode);
-    if(!r.feasible){ Object.assign(st.S,before); return {infeasible:true, diag}; }
-    auto={key:gentle.key, before, diag};
+    const before={time:st.S.time, variety:st.S.variety, budget:st.S.budget, level:st.S.level||'normal'};
+    const down={max:'high',high:'mid',mid:'low',low:'low'}, t15=x=>Math.ceil(x/15)*15;
+    // one gentle change if it is enough; otherwise a combination: less variety and/or a normal level, with up to 50% more time
+    const tries=[];
+    if(gentle) tries.push(gentle.key==='time'?{time:t15(gentle.need)}:gentle.key==='variety'?{variety:gentle.need}:{budget:Math.ceil(gentle.need/10)*10});
+    tries.push({variety:down[before.variety], time:t15(before.time*1.5)});
+    if(before.level==='fancy') tries.push({level:'normal', time:t15(before.time*1.5)});
+    tries.push({variety:'low', level:before.level==='fancy'?'normal':before.level, time:t15(before.time*1.5)});
+    let ok=false;
+    for(const ch of tries){ Object.assign(st.S,before,ch); r=solveBalanced(st.S,st.mode); if(r.feasible){ ok=true; break; } }
+    if(!ok){ Object.assign(st.S,before); return {infeasible:true, diag}; }
+    auto={before, diag};
   }
   return finish({auto, S:JSON.parse(JSON.stringify(st.S)), meals:r.meals.map(m=>({item:plain(m.item),q:m.q})), snacks:r.snacks.map(m=>({item:plain(m.item),q:m.q})), breakfasts:r.breakfasts.map(m=>({item:plain(m.item),q:m.q})), ms:r.ms});
 }
@@ -107,6 +124,14 @@ function applyGeminiAnswer(data){
   return {note:data.note?String(data.note):'', report, ban};
 }
 
+/* 'empty the fridge first': ask Gemini for dishes built around what is at home */
+function fridgeItems(S){ return (S.fridge||[]).filter(id=>ING[id] && !['pantry','oils'].includes(ING[id].cat)); }
+function withFridge(request){
+  const items=fridgeItems(st.S);
+  if(st.S.shop!=='fridge' || items.length<2) return request;
+  const f='מתכונים שמשתמשים בעיקר במה שכבר יש לי במקרר: '+items.map(id=>ING[id].n).join(', ');
+  return request ? request+'. '+f : f;
+}
 async function buildWeek(request){
   st.day=0; st.rec=0; st.ticks={}; st.savedId=null; st.view='menu'; st.gem=null; st.S.prefer=[]; st.S.seed=0; st.S.avoid=[];
   go('s4');
@@ -172,6 +197,7 @@ function renderResults(){
              protein:x=>[`להוריד את יעד החלבון ל־${x.need} ג' ביום`,'protein',x.need],
              proteinUp:x=>[`להעלות את יעד החלבון ל־${x.need} ג' ביום (בקלוריות האלה קשה לאכול פחות חלבון)`,'protein',x.need],
              variety:x=>[`פחות גיוון בתפריט (${VARIETY[x.need].label})`,'variety',x.need],
+             level:x=>['לבחור רמה "רגיל" במקום "מושקע"','level','normal'],
              prefer:x=>['לוותר על המתכונים מהבקשה ל־Gemini','prefer',0]};
     const items=p.diag.map(x=>L[x.key](x));
     $('#resTitle').textContent='אין תפריט שעומד בכל הדרישות'; $('#resSub').textContent='';
@@ -181,12 +207,19 @@ function renderResults(){
   }
   const S=p.S;
   if(p.auto){
-    const t={time:`זמן הבישול הוגדל ל־${S.time} דקות (במקום ${p.auto.before.time})`, variety:`הגיוון הורד ל"${VARIETY[S.variety].label}" (במקום "${VARIETY[p.auto.before.variety].label}")`, budget:`התקציב הוגדל ל־${S.budget} ₪ (במקום ${p.auto.before.budget})`}[p.auto.key];
+    const B=p.auto.before, ch=[];
+    if(S.time!==B.time) ch.push(`זמן הבישול הוגדל ל־${S.time} דקות (במקום ${B.time})`);
+    if(S.variety!==B.variety) ch.push(`הגיוון הורד ל"${VARIETY[S.variety].label}" (במקום "${VARIETY[B.variety].label}")`);
+    if(S.budget!==B.budget) ch.push(`התקציב הוגדל ל־${S.budget} ₪ (במקום ${B.budget})`);
+    if((S.level||'normal')!==B.level) ch.push(`הרמה שונתה ל"${LEVEL[S.level]}" (במקום "${LEVEL[B.level]}")`);
+    const t=ch.join(' ו');
     $('#alert').hidden=false; $('#alert').className='note';
     $('#alert').innerHTML=`<b>כדי שהתפריט יעמוד בכל השאר, ${t}.</b><span class="small muted">עם ההגדרות המקוריות אין תפריט אפשרי.</span><div><button class="linkbtn" type="button" id="undoAuto">לבטל ולראות אפשרויות אחרות</button></div>`;
   } else $('#alert').className='alert';
   $('#resTitle').textContent=st.savedId?(loadWeeks().find(w=>w.id===st.savedId)?.name||'השבוע שלך'):'השבוע שלך';
-  $('#resSub').textContent=`${S.days} ימים · ${new Set(p.meals.map(m=>m.item.base||m.item.id)).size} מנות עיקריות · ${p.breakfasts.length} ארוחות בוקר · בישול אחד של ${p.tot.time} דקות`;
+  const fi=fridgeItems(S), fu=fi.filter(id=>[...p.meals,...p.snacks,...p.breakfasts].some(m=>m.item.ing[id]));
+  $('#resSub').textContent=`${S.days} ימים · ${new Set(p.meals.map(m=>m.item.base||m.item.id)).size} מנות עיקריות · ${p.breakfasts.length} ארוחות בוקר · בישול אחד של ${p.tot.time} דקות`+
+    (S.shop==='fridge'&&fi.length?` · נוצלו ${fu.length} מתוך ${fi.length} מרכיבים מהמקרר`:'')+((S.level||'normal')!=='normal'?` · רמה: ${LEVEL[S.level]}`:'');
   $('#summary').innerHTML=`
     <div class="sum"><span>עלות האוכל</span><b>${fmt(p.tot.cost)} ₪</b><small>מתוך ${S.budget} ₪</small></div>
     <div class="sum"><span>חלבון ביום</span><b>${fmt(p.tot.p/S.days)} ג'</b><small>יעד ${S.protein}</small></div>
@@ -200,7 +233,7 @@ function pager(i,n,label,sub,key){
     <div class="t"><h3>${label}</h3><span class="small muted">${sub}</span></div>
     <button class="arrow" type="button" data-pg="${key}" data-d="1" ${i===n-1?'disabled':''} aria-label="הבא">‹</button></div>`;
 }
-const gtag = it => it.src==='gemini' ? '<span class="gtag">Gemini</span>' : '';
+const gtag = it => (it.src==='gemini' ? '<span class="gtag">Gemini</span>' : '') + (it.lvl ? '<span class="gtag lvl">מושקע</span>' : '') + (it.src_url ? '<span class="gtag src">Budget Bytes</span>' : '');
 function viewMenu(){
   const p=st.plan, S=p.S, d=p.days[st.day];
   const sk=Math.abs(d.k/S.kcal-1)<=KCAL_TOL?'good':Math.abs(d.k/S.kcal-1)<=2*KCAL_TOL?'warn':'bad';
@@ -242,6 +275,7 @@ function viewCook(){
     $('#viewBody').innerHTML=pager(st.rec,n,esc(item.n)+gtag(item),`מתכון ${st.rec+1} מתוך ${list.length} · ${label} · ${item.time} דק'`,'rec')+
       `<div class="qty">${Object.entries(item.ing).map(([id,g])=>`<span>${esc(ING[id].n)}</span><span>${qtyText(id,g*q)}</span>`).join('')}</div>
        <ol class="stepsl">${item.steps.map(s=>`<li>${esc(s)}</li>`).join('')}</ol>
+       ${item.src_url?`<p class="small muted" style="margin:0">מתכון מבוסס על <a href="${esc(item.src_url)}" target="_blank" rel="noopener" dir="ltr">${esc(item.orig)} · Budget Bytes</a>. השלבים נכתבו מחדש, והכמויות הומרו לגרמים למנה. ${item.adapt?'מה שינינו: '+esc(item.adapt):''}</p>`:''}
        ${st.rec===0?'<p class="small muted" style="margin:0">מתחילים מהמתכון הארוך ביותר, ובזמן שהוא על האש מכינים את הבאים.</p>':''}`;
   } else {
     $('#viewBody').innerHTML=pager(st.rec,n,'לוח זמנים מ־Gemini','סוף הבישול','rec')+
@@ -265,7 +299,7 @@ $('#view').addEventListener('click',e=>{ const b=e.target.closest('button'); if(
 document.addEventListener('click',async e=>{
   const pg=e.target.closest('[data-pg]'); if(pg){ st[pg.dataset.pg]+=Number(pg.dataset.d); renderResults(); }
   const gd=e.target.closest('[data-goday]'); if(gd){ st.day=Number(gd.dataset.goday); renderResults(); }
-  const fx=e.target.closest('[data-fix]'); if(fx){ if(fx.dataset.fix==='prefer'){ st.S.prefer=[]; st.plan=solvePlan(); renderResults(); updateNav(); return; } if(fx.dataset.fix==='variety'){ st.S.variety=fx.dataset.val; buildWeek(''); return; } st.S[fx.dataset.fix]=Number(fx.dataset.val); if(fx.dataset.fix==='protein') st.customTargets=true; buildWeek(''); }
+  const fx=e.target.closest('[data-fix]'); if(fx){ if(fx.dataset.fix==='prefer'){ st.S.prefer=[]; st.plan=solvePlan(); renderResults(); updateNav(); return; } if(fx.dataset.fix==='variety'||fx.dataset.fix==='level'){ st.S[fx.dataset.fix]=fx.dataset.val; buildWeek(''); return; } st.S[fx.dataset.fix]=Number(fx.dataset.val); if(fx.dataset.fix==='protein') st.customTargets=true; buildWeek(''); }
   if(e.target.id==='undoAuto' && st.plan && st.plan.auto){ Object.assign(st.S, st.plan.auto.before); st.plan={infeasible:true, diag:st.plan.auto.diag}; renderResults(); updateNav(); return; }
   if(e.target.id==='askBtn'){ const r=$('#askIn').value.trim(); if(!r){ $('#askIn').focus(); return; } $('#askIn').value=''; buildWeek(r); }
   if(e.target.id==='gRetry' && st.gem){ buildWeek(st.gem.request); return; }
@@ -331,7 +365,7 @@ document.addEventListener('click',e=>{
    ========================================================= */
 function renderHow(){
   const S=st.S, N=S.days*S.meals, rep=Math.min(S.days,VARIETY[S.variety].rep), main=Object.values(ING).filter(x=>x.cat!=='pantry').length;
-  $('#dataLine').textContent=`${main} מרכיבים עיקריים, ${Object.keys(ING).length-main} תבלינים ורטבים, ${RECIPES.filter(r=>r.src==='base').length} מתכוני בסיס${RECIPES.some(r=>r.src==='gemini')?' ו־'+RECIPES.filter(r=>r.src==='gemini').length+' מתכונים מ־Gemini':''}.`;
+  $('#dataLine').textContent=`${main} מרכיבים עיקריים, ${Object.keys(ING).length-main} תבלינים ורטבים, ${RECIPES.filter(r=>r.src==='base').length} מתכוני בסיס (מתוכם ${RECIPES.filter(r=>r.src_url).length} מבוססים על Budget Bytes)${RECIPES.some(r=>r.src==='gemini')?' ו־'+RECIPES.filter(r=>r.src==='gemini').length+' מתכונים מ־Gemini':''}.`;
   $('#howGoal').textContent='לפי ההגדרות הנוכחיות שלך. המטרה: '+({cost:'התפריט הכי זול',time:'הכי מעט זמן בישול',protein:'הכי הרבה חלבון'})[st.mode]+' שעומד בכל הדרישות.';
   const rows=[
     [`${N} ארוחות עיקריות`, `${S.days} ימים × 2`],
@@ -388,7 +422,7 @@ function updateNav(){
 $('#next').addEventListener('click',()=>{
   const i=FLOW.indexOf(st.screen);
   if(i<2) go(FLOW[i+1]);
-  else if(i===2) buildWeek($('#request').value.trim());
+  else if(i===2) buildWeek(withFridge($('#request').value.trim()));
   else saveWeek();
 });
 $('#back').addEventListener('click',()=>{

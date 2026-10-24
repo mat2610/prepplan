@@ -56,7 +56,11 @@
       <button type="button" class="choice" data-v="cut"><span class="ic">−</span><b>ירידה במשקל</b><span>פחות קלוריות, חלבון גבוה לשמירת שריר</span></button>
     </div>
     <div class="panel">
-      <div class="stepper"><span>המשקל שלך</span><div class="ctl"><button type="button" data-step="weight" data-d="1" aria-label="הוסף">+</button><output id="weightOut"></output><button type="button" data-step="weight" data-d="-1" aria-label="הורד">−</button></div></div>
+      <div class="weight">
+        <label for="weightIn">המשקל שלך</label>
+        <div class="wbox"><input type="number" id="weightIn" inputmode="numeric" min="40" max="160" step="1" aria-label="משקל בקילוגרם"><span>ק"ג</span></div>
+        <input type="range" id="weightRange" min="40" max="160" step="1" aria-label="משקל">
+      </div>
       <div class="target" id="targetLine"></div>
       <div class="edit" id="editTargets" hidden>
         <label>קלוריות ליום<input type="number" id="kcal" step="50"></label>
@@ -79,6 +83,13 @@
       <button type="button" data-v="low">מעט</button>
       <button type="button" data-v="mid">בינוני</button>
       <button type="button" data-v="high">הרבה</button>
+      <button type="button" data-v="max">בלי חזרות</button>
+    </div>
+    <div class="q"><h3>כמה מושקע?</h3><p id="levelHint"></p></div>
+    <div class="seg" id="level">
+      <button type="button" data-v="simple">פשוט ומהיר</button>
+      <button type="button" data-v="normal">רגיל</button>
+      <button type="button" data-v="fancy">מושקע</button>
     </div>
     <div class="q"><h3>מה הכי חשוב לך?</h3></div>
     <div class="seg" id="mode">
@@ -91,6 +102,11 @@
   <!-- 3 · kitchen -->
   <section class="screen" id="s3" hidden>
     <div class="q"><h2>מה יש במטבח?</h2><p>מה שתסמנו לא ייכנס לרשימת הקניות, והתפריט ינסה להשתמש בזה.</p></div>
+    <div class="q"><h3>יש זמן לקניות השבוע?</h3><p id="shopHint"></p></div>
+    <div class="seg" id="shop">
+      <button type="button" data-v="normal">כן, קניות רגילות</button>
+      <button type="button" data-v="fridge">קודם לרוקן את המקרר</button>
+    </div>
     <input type="search" class="search" id="fridgeSearch" placeholder="חיפוש מרכיב, למשל: אורז">
     <div class="cats" id="fridge"></div>
     <div class="q"><h3>משהו שאתם לא אוכלים?</h3></div>

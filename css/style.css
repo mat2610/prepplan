@@ -49,6 +49,8 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
 .ask{border:2px dashed var(--accent);background:var(--accent-soft);border-radius:var(--r);padding:14px;display:grid;gap:10px;margin-top:14px}
 .ask .row2{display:flex;gap:8px;flex-wrap:wrap}
 .ask .row2 input{flex:1;min-width:200px}
+.gtag.lvl{background:var(--accent)}
+.gtag.src{background:#5b6b8c}
 .gtag{display:inline-block;font-size:11px;font-weight:700;padding:1px 7px;border-radius:999px;background:var(--accent-2);color:#fff;margin-inline-start:6px;vertical-align:middle}
 /* top bar */
 .top{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap}
@@ -201,3 +203,14 @@ details.adv{font-size:14px} details.adv summary{cursor:pointer;color:var(--muted
 .howgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 @media (max-width:640px){.howgrid{grid-template-columns:minmax(0,1fr)}}
 details.panel summary{cursor:pointer;font-weight:600;color:var(--ink)}
+#viewBody a{color:var(--accent);font-weight:600}
+
+/* weight: typed number + slider */
+.weight{display:grid;gap:10px}
+.weight label{font-weight:600}
+.wbox{display:flex;align-items:baseline;gap:8px;justify-content:center}
+.wbox input{width:3.6em;font:inherit;font-size:40px;font-weight:700;text-align:center;border:1.5px solid var(--line);border-radius:14px;padding:4px 6px;background:var(--surface);color:inherit;-moz-appearance:textfield}
+.wbox input::-webkit-outer-spin-button,.wbox input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.wbox input:focus{outline:none;border-color:var(--accent)}
+.wbox span{font-size:20px;color:var(--muted)}
+#weightRange{width:100%;accent-color:var(--accent);direction:ltr}

@@ -20,7 +20,7 @@ function nutrition(item){
 }
 [...RECIPES, ...BREAKFASTS, ...SNACKS].forEach(r => Object.assign(r, nutrition(r), {src:'base'}));
 const BIG = 1.4;   // a 'large portion' = 1.4 × the standard recipe
-const VARIETY = {low:{rep:5,label:'מעט'}, mid:{rep:3,label:'בינוני'}, high:{rep:2,label:'הרבה'}};
+const VARIETY = {low:{rep:5,label:'מעט'}, mid:{rep:3,label:'בינוני'}, high:{rep:2,label:'הרבה'}, max:{rep:1,label:'בלי חזרות'}};
 /* small deterministic noise so 'another menu' gives a different valid plan */
 function noise(seed,id){ let h=seed*2654435761>>>0; for(const ch of id) h=Math.imul(h^ch.charCodeAt(0),16777619)>>>0; return (h%1000)/1000; }
 
@@ -31,6 +31,14 @@ function itemCost(item, fridge){
     if (!fridge.has(id) && !isPantry(id)) cost += ING[id].price*g/1000;
   return cost;
 }
+/* value of what a portion takes from the fridge (used by the 'empty the fridge first' option) */
+function fridgeValue(item, fridge){
+  let v=0;
+  for (const [id,g] of Object.entries(item.ing))
+    if (fridge.has(id) && !isPantry(id)) v += ING[id].price*g/1000;
+  return v;
+}
+const LEVEL = {simple:'פשוט ומהיר', normal:'רגיל', fancy:'מושקע'};
 
 /* Build the integer program.
    x_r = weekly portions of recipe r (integer)   y_r = 1 if recipe r is cooked this week (binary)
@@ -52,23 +60,32 @@ function buildModel(S, mode, drop=new Set()){
     time:{max:S.time},
     distinct:{min:Math.ceil(N/rep)},
   };
+  const level=S.level||'normal', lvlOk = r => level!=='simple' || (!r.lvl && r.time<=40);
   const prefer=new Set(S.prefer||[]);
   const nPref=RECIPES.filter(r=>prefer.has(r.id)&&ok(r)).length;
   if (nPref) C.prefer={min:Math.min(2,nPref)};   // recipes the user asked for (via Gemini) must appear
   if (drop.has('proteinMax')) delete C.protein.max;
   for (const d of drop) delete C[d];
   const V={}, ints={};
-  const recipes = RECIPES.filter(r=>ok(r) && (OPT.useBase || r.src!=='base'));
+  const recipes = RECIPES.filter(r=>ok(r) && lvlOk(r) && (OPT.useBase || r.src!=='base'));
+  const nFancy = recipes.filter(r=>r.lvl).length;
+  if (level==='fancy' && nFancy && !drop.has('level')) C.fancy={min:Math.min(2,nFancy)};   // 'elaborate' week: at least 2 elaborate dishes
   const snacks  = SNACKS.filter(ok);
   const breakfasts = BREAKFASTS.filter(ok);
   const W = mode==='cost' ? {cost:1,time:0,protein:0} : mode==='time' ? {cost:0.001,time:1,protein:0} : {cost:0.001,time:0,protein:-1};
+  /* 'empty the fridge first': every dish cooked gets a bonus for each fridge item it uses (on the existing y_r binary,
+     so the model stays as fast), and buying less counts even when the goal is time or protein. */
+  const FR = S.shop==='fridge', FRW = 12;
+  const frItems = FR ? [...fridge].filter(id=>ING[id] && !isPantry(id) && ING[id].cat!=='oils') : [];
+  const frCount = it => frItems.filter(id=>it.ing[id]).length;
+  const pObj = (it,cost,f,j) => (W.protein*it.p*f + W.cost*cost)*(W.protein?1/j:j) + (FR && mode!=='cost' ? 0.5*cost : 0);
   for (const r of recipes){
     const cost=itemCost(r,fridge);
     const j=jitter(r.id);
-    V['x_'+r.id]={meals:1, kcal:r.k, protein:r.p, cost, ['lim_'+r.id]:1, ['lo_'+r.id]:1, obj:(W.protein*r.p+W.cost*cost)*(W.protein?1/j:j)};
-    V['z_'+r.id]={meals:1, kcal:r.k*BIG, protein:r.p*BIG, cost:cost*BIG, ['lim_'+r.id]:1, ['lo_'+r.id]:1, obj:(W.protein*r.p*BIG+W.cost*cost*BIG)*(W.protein?1/j:j)};
+    V['x_'+r.id]={meals:1, kcal:r.k, protein:r.p, cost, ['lim_'+r.id]:1, ['lo_'+r.id]:1, obj:pObj(r,cost,1,j)};
+    V['z_'+r.id]={meals:1, kcal:r.k*BIG, protein:r.p*BIG, cost:cost*BIG, ['lim_'+r.id]:1, ['lo_'+r.id]:1, obj:pObj(r,cost*BIG,BIG,j)};
     ints['z_'+r.id]=1;
-    V['y_'+r.id]={time:r.time, distinct:1, prefer:prefer.has(r.id)?1:0, ['lim_'+r.id]:-rep, ['lo_'+r.id]:-1, ['cap_'+r.id]:1, obj:W.time*r.time};
+    V['y_'+r.id]={time:r.time, distinct:1, prefer:prefer.has(r.id)?1:0, fancy:r.lvl?1:0, ['lim_'+r.id]:-rep, ['lo_'+r.id]:-1, ['cap_'+r.id]:1, obj:W.time*r.time - FRW*frCount(r)};
     ints['x_'+r.id]=1; ints['y_'+r.id]=1;
     C['lim_'+r.id]={max:0};   // x_r <= rep * y_r : variety cap, only if cooked
     C['lo_'+r.id]={min:0};    // x_r >= y_r        : cooked => eaten
@@ -76,13 +93,13 @@ function buildModel(S, mode, drop=new Set()){
   }
   for (const s of snacks){
     const cost=itemCost(s,fridge);
-    V['s_'+s.id]={snacks:1, kcal:s.k, protein:s.p, cost, ['slim_'+s.id]:1, obj:W.protein*s.p+W.cost*cost};
+    V['s_'+s.id]={snacks:1, kcal:s.k, protein:s.p, cost, ['slim_'+s.id]:1, obj:pObj(s,cost,1,1) - 3*frCount(s)};
     ints['s_'+s.id]=1; C['slim_'+s.id]={max:snacks.length>=4?rep:S.days};   // snacks rotate too
   }
-  const bRep = breakfasts.length>=Math.ceil(S.days/2) ? 2 : S.days;   // rotate breakfasts: same one at most twice a week
+  const bRep = S.variety==='max' && breakfasts.length>=S.days ? 1 : breakfasts.length>=Math.ceil(S.days/2) ? 2 : S.days;   // 'no repeats': a different breakfast every day   // rotate breakfasts: same one at most twice a week
   for (const b of breakfasts){
     const cost=itemCost(b,fridge);
-    V['b_'+b.id]={breakfasts:1, kcal:b.k, protein:b.p, cost, ['blim_'+b.id]:1, obj:(W.protein*b.p+W.cost*cost)*jitter(b.id)};
+    V['b_'+b.id]={breakfasts:1, kcal:b.k, protein:b.p, cost, ['blim_'+b.id]:1, obj:(W.protein*b.p+W.cost*cost)*jitter(b.id) + (FR && mode!=='cost' ? 0.5*cost : 0) - 3*frCount(b)};
     ints['b_'+b.id]=1; C['blim_'+b.id]={max:bRep};
   }
   return {model:{optimize:'obj', opType:'min', constraints:C, variables:V, ints, options:{timeout:3000}},
@@ -140,7 +157,8 @@ function diagnose(S){
   r=solve(S,'time',new Set(['time']));        if(r.feasible) out.push({key:'time',    need:totals(r.meals,r.snacks,S,r.breakfasts).time});
   r=solve(S,'protein',new Set(['protein']));  if(r.feasible){ const n=Math.floor(totals(r.meals,r.snacks,S,r.breakfasts).p/S.days); if(n<S.protein) out.push({key:'protein', need:n}); }
   r=solve(S,'cost',new Set(['proteinMax']));  if(r.feasible){ const n=Math.ceil(totals(r.meals,r.snacks,S,r.breakfasts).p/S.days/1.15/5)*5; if(n>S.protein) out.push({key:'proteinUp', need:n}); }
-  if (S.variety!=='low'){ r=solve({...S,variety:S.variety==='high'?'mid':'low'},'cost'); if(r.feasible) out.push({key:'variety',need:S.variety==='high'?'mid':'low'}); }
+  if (S.variety!=='low'){ const dn={max:'high',high:'mid',mid:'low'}[S.variety]; r=solve({...S,variety:dn},'cost'); if(r.feasible) out.push({key:'variety',need:dn}); }
+  if ((S.level||'normal')==='fancy'){ r=solve(S,'cost',new Set(['level'])); if(r.feasible) out.push({key:'level',need:'normal'}); }
   if ((S.prefer||[]).length){ r=solve(S,'cost',new Set(['prefer'])); if(r.feasible) out.push({key:'prefer'}); }
   return out;
 }
@@ -176,8 +194,10 @@ function assignDays(plan, S){
 /* local search: swap meals / move or swap snacks between days while the daily balance improves */
 function balanceDays(days,S){
   const score=d=>((d.k-S.kcal)/S.kcal)**2 + 0.5*Math.max(0,(S.protein-d.p)/S.protein)**2;
-  const total=()=>days.reduce((a,d)=>a+score(d),0);
   const baseOf=x=>x.base||x.id;
+  // the same dish on two days in a row counts as a small penalty, so the week feels different every day
+  const repeats=()=>{ let n=0; for (let i=1;i<days.length;i++){ const prev=new Set(days[i-1].meals.map(baseOf)); n+=days[i].meals.filter(x=>prev.has(baseOf(x))).length; } return n; };
+  const total=()=>days.reduce((a,d)=>a+score(d),0) + 0.01*repeats();
   const apply=(a,b,ia,ib,key)=>{ const x=a[key][ia], y=b[key][ib];
     a[key][ia]=y; b[key][ib]=x; a.k+=y.k-x.k; a.p+=y.p-x.p; b.k+=x.k-y.k; b.p+=x.p-y.p; };
   for (let iter=0; iter<200; iter++){
@@ -244,6 +264,7 @@ function importRecipes(list){
         ing:Object.fromEntries(Object.entries(ing).map(([k,v])=>[k,Number(v)])),
         steps:(Array.isArray(g.steps)?g.steps:[]).slice(0,6).map(String), src:'gemini'};
       Object.assign(r, nutrition(r));
+      if (r.steps.length>=5 && r.time>=40) r.lvl=2;   // detailed, longer Gemini recipes count as 'elaborate'
       if (RECIPES.some(x=>x.n===r.n)) row.errors.push('כבר קיים במאגר');
       else { RECIPES.push(r); row.added=true; row.k=r.k; row.p=r.p; row.id=r.id; }
     }
@@ -254,4 +275,4 @@ function importRecipes(list){
 }
 function removeGemini(){ for (let i=RECIPES.length-1;i>=0;i--) if (RECIPES[i].src==='gemini') RECIPES.splice(i,1); }
 
-if (typeof module!=='undefined') module.exports={solveBalanced,VARIETY,KCAL_TOL,OPT,nutrition,itemCost,buildModel,solve,totals,diagnose,assignDays,shoppingList,importRecipes,removeGemini};
+if (typeof module!=='undefined') module.exports={fridgeValue,LEVEL,solveBalanced,VARIETY,KCAL_TOL,OPT,nutrition,itemCost,buildModel,solve,totals,diagnose,assignDays,shoppingList,importRecipes,removeGemini};
