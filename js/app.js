@@ -77,7 +77,10 @@ $('#fridgeSearch').addEventListener('input',renderFridge);
 ['kcal','protein'].forEach(id=>$('#'+id).addEventListener('change',e=>{ st.S[id]=Number(e.target.value)||st.S[id]; st.customTargets=true; renderInputs(); }));
 document.addEventListener('click',e=>{
   const s=e.target.closest('[data-step]');
-  if(s){ const k=s.dataset.step,[mn,mx,step]=LIM[k]; st.S[k]=Math.max(mn,Math.min(mx,st.S[k]+step*Number(s.dataset.d))); if(k==='weight') syncTargets(); renderInputs(); }
+  if(s){ const k=s.dataset.step,[mn,mx,step]=LIM[k], old=st.S[k]; st.S[k]=Math.max(mn,Math.min(mx,st.S[k]+step*Number(s.dataset.d))); if(k==='weight') syncTargets();
+    // more days = more food and more cooking: budget and time follow the number of days, so the plan stays possible
+    if(k==='days' && st.S.days!==old){ const f=st.S.days/old, cl=(v,[a,b,c])=>Math.max(a,Math.min(b,Math.round(v/c)*c)); st.S.budget=cl(st.S.budget*f,LIM.budget); st.S.time=cl(st.S.time*f,LIM.time); }
+    renderInputs(); }
   if(e.target.id==='toggleEdit'){ $('#editTargets').hidden=!$('#editTargets').hidden; renderInputs(); }
   const fr=e.target.closest('[data-fr]');
   if(fr){ const v=fr.dataset.fr, a=st.S.fridge; st.S.fridge=a.includes(v)?a.filter(x=>x!==v):[...a,v]; renderFridge(); }
@@ -94,21 +97,22 @@ function solvePlan(){
   if(typeof solver==='undefined') return {error:'ספריית החישוב לא נטענה. רעננו את הדף.'};
   let r=solveBalanced(st.S,st.mode), auto=null;
   if(!r.feasible){
-    const diag=diagnose(st.S);
-    // apply automatically the gentlest single change (time, variety, budget), protein changes stay the user's call
-    const gentle=diag.find(x=>x.key==='time' && x.need<=st.S.time*1.5) || diag.find(x=>x.key==='variety') || diag.find(x=>x.key==='budget' && x.need<=st.S.budget*1.3);
+    // fast path: one solve finds how much cooking time this plan really needs (the usual reason there is no menu).
+    // The full diagnosis (several solves) runs only when nothing simple works, or when the user asks to undo.
     const before={time:st.S.time, variety:st.S.variety, budget:st.S.budget, level:st.S.level||'normal'};
     const down={max:'high',high:'mid',mid:'low',low:'low'}, t15=x=>Math.ceil(x/15)*15;
-    // one gentle change if it is enough; otherwise a combination: less variety and/or a normal level, with up to 50% more time
     const tries=[];
-    if(gentle) tries.push(gentle.key==='time'?{time:t15(gentle.need)}:gentle.key==='variety'?{variety:gentle.need}:{budget:Math.ceil(gentle.need/10)*10});
+    const rt=solve(st.S,'time',new Set(['time']));
+    if(rt.feasible){ const need=totals(rt.meals,rt.snacks,st.S,rt.breakfasts).time; if(need<=before.time*1.5) tries.push({time:Math.max(t15(need),before.time+15)}); }
+    tries.push({variety:down[before.variety]});
     tries.push({variety:down[before.variety], time:t15(before.time*1.5)});
+    tries.push({budget:Math.ceil(before.budget*1.3/10)*10});
     if(before.level==='fancy') tries.push({level:'normal', time:t15(before.time*1.5)});
     tries.push({variety:'low', level:before.level==='fancy'?'normal':before.level, time:t15(before.time*1.5)});
     let ok=false;
     for(const ch of tries){ Object.assign(st.S,before,ch); r=solveBalanced(st.S,st.mode); if(r.feasible){ ok=true; break; } }
-    if(!ok){ Object.assign(st.S,before); return {infeasible:true, diag}; }
-    auto={before, diag};
+    if(!ok){ Object.assign(st.S,before); return {infeasible:true, diag:diagnose(st.S)}; }
+    auto={before};
   }
   return finish({auto, S:JSON.parse(JSON.stringify(st.S)), meals:r.meals.map(m=>({item:plain(m.item),q:m.q})), snacks:r.snacks.map(m=>({item:plain(m.item),q:m.q})), breakfasts:r.breakfasts.map(m=>({item:plain(m.item),q:m.q})), ms:r.ms});
 }
@@ -133,21 +137,28 @@ function withFridge(request){
   return request ? request+'. '+f : f;
 }
 async function buildWeek(request){
+  const token=(buildWeek.n=(buildWeek.n||0)+1);
+  const names=st.plan&&st.plan.meals?st.plan.meals.map(m=>m.item.n):[];
   st.day=0; st.rec=0; st.ticks={}; st.savedId=null; st.view='menu'; st.gem=null; st.S.prefer=[]; st.S.seed=0; st.S.avoid=[];
   go('s4');
-  if(request){
-    const prompt=recipePrompt(request, st.S, st.plan&&st.plan.meals?st.plan.meals.map(m=>m.item.n):[]);
-    if(gemAvailable()){
-      setBusy('Gemini יוצר מתכונים לפי הבקשה שלך… (זה יכול לקחת עד חצי דקה)');
-      try{ st.gem=applyGeminiAnswer(parseJSON(await gemini(prompt,true))); }
-      catch(err){ st.gem={error:gemErrorText(err), prompt}; }
-    } else st.gem={error:gemErrorText(new Error('nokey')), prompt};
-    st.gem.request=request;
-  }
+  // 1) the menu first, right away (a few hundred ms) …
   setBusy('מחשב את התפריט הכי טוב…');
   await new Promise(r=>setTimeout(r,30));
   st.plan=solvePlan();
+  if(request) st.gem={pending:true, request};
   setBusy('');
+  renderResults(); updateNav();
+  if(!request) return;
+  // 2) … then Gemini in the background; when its recipes pass the checks, the menu is rebuilt with them
+  const prompt=recipePrompt(request, st.S, names);
+  let g;
+  if(gemAvailable()){
+    try{ g=applyGeminiAnswer(parseJSON(await gemini(prompt,true))); }
+    catch(err){ g={error:gemErrorText(err), prompt}; }
+  } else g={error:gemErrorText(new Error('nokey')), prompt};
+  if(token!==buildWeek.n) return;   // the user already asked for something else
+  g.request=request; st.gem=g;
+  if(!g.error && g.report.some(r=>r.added)){ st.plan=solvePlan(); st.day=0; st.rec=0; }
   renderResults(); updateNav();
 }
 function setBusy(t){ $('#busy').hidden=!t; $('#busyText').textContent=t; if(t){ $('#results').hidden=true; $('#alert').hidden=true; $('#gemNote').hidden=true; } }
@@ -164,6 +175,7 @@ function renderGemNote(){
   const g=st.gem, box=$('#gemNote');
   if(!g){ box.hidden=true; return; }
   box.hidden=false;
+  if(g.pending){ box.innerHTML=`<b>הבקשה: "${esc(g.request)}"</b><span class="small muted"><span class="spin"></span> Gemini יוצר מתכונים לפי הבקשה. התפריט כבר מוכן, והוא יתעדכן כש־Gemini יסיים (עד חצי דקה).</span>`; return; }
   if(g.error){
     box.innerHTML=`<b>הבקשה: "${esc(g.request||'')}"</b><span class="small" style="color:var(--bad)">${esc(g.error)} התפריט נבנה בלי הבקשה.</span>
       <div><button class="btn sm" type="button" id="gRetry">נסה שוב</button></div>
@@ -300,7 +312,7 @@ document.addEventListener('click',async e=>{
   const pg=e.target.closest('[data-pg]'); if(pg){ st[pg.dataset.pg]+=Number(pg.dataset.d); renderResults(); }
   const gd=e.target.closest('[data-goday]'); if(gd){ st.day=Number(gd.dataset.goday); renderResults(); }
   const fx=e.target.closest('[data-fix]'); if(fx){ if(fx.dataset.fix==='prefer'){ st.S.prefer=[]; st.plan=solvePlan(); renderResults(); updateNav(); return; } if(fx.dataset.fix==='variety'||fx.dataset.fix==='level'){ st.S[fx.dataset.fix]=fx.dataset.val; buildWeek(''); return; } st.S[fx.dataset.fix]=Number(fx.dataset.val); if(fx.dataset.fix==='protein') st.customTargets=true; buildWeek(''); }
-  if(e.target.id==='undoAuto' && st.plan && st.plan.auto){ Object.assign(st.S, st.plan.auto.before); st.plan={infeasible:true, diag:st.plan.auto.diag}; renderResults(); updateNav(); return; }
+  if(e.target.id==='undoAuto' && st.plan && st.plan.auto){ Object.assign(st.S, st.plan.auto.before); st.plan={infeasible:true, diag:diagnose(st.S)}; renderResults(); updateNav(); return; }
   if(e.target.id==='askBtn'){ const r=$('#askIn').value.trim(); if(!r){ $('#askIn').focus(); return; } $('#askIn').value=''; buildWeek(r); }
   if(e.target.id==='gRetry' && st.gem){ buildWeek(st.gem.request); return; }
   if(e.target.id==='gApply'){

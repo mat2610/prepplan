@@ -102,7 +102,7 @@ function buildModel(S, mode, drop=new Set()){
     V['b_'+b.id]={breakfasts:1, kcal:b.k, protein:b.p, cost, ['blim_'+b.id]:1, obj:(W.protein*b.p+W.cost*cost)*jitter(b.id) + (FR && mode!=='cost' ? 0.5*cost : 0) - 3*frCount(b)};
     ints['b_'+b.id]=1; C['blim_'+b.id]={max:bRep};
   }
-  return {model:{optimize:'obj', opType:'min', constraints:C, variables:V, ints, options:{timeout:3000}},
+  return {model:{optimize:'obj', opType:'min', constraints:C, variables:V, ints, options:{timeout:1500}},
           nVars:Object.keys(V).length, nCons:Object.keys(C).length, recipes, snacks, breakfasts};
 }
 

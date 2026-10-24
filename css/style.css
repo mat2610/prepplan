@@ -214,3 +214,4 @@ details.panel summary{cursor:pointer;font-weight:600;color:var(--ink)}
 .wbox input:focus{outline:none;border-color:var(--accent)}
 .wbox span{font-size:20px;color:var(--muted)}
 #weightRange{width:100%;accent-color:var(--accent);direction:ltr}
+.note .spin{display:inline-block;vertical-align:middle;width:14px;height:14px;border-width:2px;margin-inline-end:6px}
