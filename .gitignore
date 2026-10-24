@@ -1,3 +1,9 @@
 .DS_Store
 .vscode/
 *.log
+
+# project documents: kept in this folder but never pushed to GitHub (the summary has a personal ID number)
+*.docx
+*.pdf
+*.txt
+captures/
